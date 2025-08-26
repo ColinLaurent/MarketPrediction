@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "marketprediction"
+version = "0.1.0"
+description = "Trading project"
+authors = [{name = "Colin LAURENT"}]
+
+[tool.setuptools.packages.find]
+where = ["src"]
