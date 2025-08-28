@@ -1,3 +1,9 @@
+import numpy as np
+import pandas as pd
+
+import plotly.graph_objects as go
+
+
 class Strategy:
     def generate_signals(self, data, tickers):
         """Return a column 'signal' : 1 -> buy ; 0 -> hold ; -1 -> sell"""
@@ -142,3 +148,46 @@ class Backtester:
             self.wallet['Total'].append(current_total + current_cash)
 
         return
+
+    def plot_wallet(self):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=self.data.index,
+            y=self.wallet['Total'],
+            name='Wallet'
+        ))
+        for ticker in self.tickers:
+            fig.add_trace(go.Scatter(
+                x=self.data.index,
+                y=(self.data[f'Close {ticker}'] * self.initial_capital /
+                   self.data[f'Close {ticker}'][0]),
+                name=f'Normalized Close {ticker}'
+            ))
+        fig.update_layout(title="Wallet")
+        fig.show()
+        return
+
+    def plot_return(self):
+        total_wallet = pd.Series(self.wallet['Total'])
+        strategy_return = np.log(total_wallet / total_wallet.shift(1))
+        market_return = {
+            ticker: (np.log(
+                self.data[f'Close {ticker}'] /
+                self.data[f'Close {ticker}'].shift(1)
+            ))
+            for ticker in self.tickers
+        }
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=self.data.index[1:],
+            y=strategy_return[1:],
+            name="Strategy Return"
+        ))
+        for ticker in self.tickers:
+            fig.add_trace(go.Scatter(
+                x=self.data.index[1:],
+                y=market_return[ticker][1:],
+                name=f'Return {ticker}'
+            ))
+        fig.update_layout(title='Returns')
+        fig.show()
