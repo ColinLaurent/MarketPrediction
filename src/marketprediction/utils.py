@@ -113,39 +113,57 @@ class Backtester:
 
     def run(self):
         data = self.strategy.generate_signals(self.data, self.tickers)
+        positions = pd.DataFrame()
 
-        # Add possibility of selling to increase cash then buy the same day
-        # Add hold_max
-
-        for _, row in data.iterrows():
-            current_total = 0
+        for date, row in data.iterrows():
+            current_total_assets = 0
             current_cash = self.wallet['Cash'][-1]
             for ticker in self.tickers:
-                current_pos = self.wallet[ticker][-1]
-                if (
+                nb_shares = self.wallet[ticker][-1][0]
+                ### Il faut tester si holding days >= hold_max
+                old_pos_idx = (
+                    (positions['Ticker'] == ticker) &
+                    (positions['Holding Days'] == self.hold_max)
+                )
+                if not positions.loc[old_pos_idx].empty:
+                    quantity = positions.loc[old_pos_idx, 'Quantity']
+                    current_cash += row[f'Open {ticker}'] * quantity
+                    nb_shares -= quantity
+                    positions = positions.drop(old_pos_idx)
+                if (row[f'Signal {ticker}'] == -1) and nb_shares:
+                    current_cash += row[f'Open {ticker}']
+                    nb_shares -= 1
+                    idx = (
+                        positions[positions['Ticker'] == ticker]
+                        ['Holding Days']
+                        .idxmax()
+                    )
+                    positions.loc[idx, 'Quantity'] -= 1
+                    if positions.loc[idx, 'Quantity'] == 0:
+                        positions = positions.drop(idx)
+                elif (
                     (row[f'Signal {ticker}'] == 1) and
                     (current_cash >= row[f'Open {ticker}'])
                 ):
                     current_cash -= row[f'Open {ticker}']
-                    self.wallet[ticker].append(
-                        [current_pos[0] + 1,
-                         current_pos[1] + row[f'Open {ticker}']]
-                    )
-                elif (row[f'Signal {ticker}'] == -1) and (current_pos[0] > 0):
-                    current_cash += row[f'Open {ticker}']
-                    self.wallet[ticker].append(
-                        [current_pos[0] - 1,
-                         current_pos[1] - row[f'Open {ticker}']]
-                    )
-                else:
-                    self.wallet[ticker].append(current_pos)
+                    nb_shares += 1
+                    new_pos = pd.DataFrame({
+                        'Ticker': [ticker],
+                        'Buy Date': [date],
+                        'Buy Price': [row[f'Open {ticker}']],
+                        'Holding Days': [0],
+                        'Quantity': [1]
+                    })
+                    positions = pd.concat([positions, new_pos], axis=0)
 
-                self.wallet[ticker][-1][1] = (self.wallet[ticker][-1][0] *
-                                              row[f'Close {ticker}'])
-                current_total += self.wallet[ticker][-1][1]
+                self.wallet[ticker].append(
+                    [nb_shares, nb_shares * row[f'Close {ticker}']]
+                )
+                current_total_assets += self.wallet[ticker][-1][1]
 
             self.wallet['Cash'].append(current_cash)
-            self.wallet['Total'].append(current_total + current_cash)
+            self.wallet['Total'].append(current_total_assets + current_cash)
+            positions['Holding Days'] += 1
 
         return
 
