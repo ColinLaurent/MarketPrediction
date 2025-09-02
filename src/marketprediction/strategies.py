@@ -34,6 +34,48 @@ class TrendFollowingStrategy(Strategy):
         return data
 
 
+class MovingAverageStrategy(Strategy):
+    def __init__(self, ma_short=5, ma_long=30, thresh=0.9):
+        self.ma_short = ma_short
+        self.ma_long = ma_long
+        self.thresh = thresh
+
+    def generate_signals(self, data, tickers):
+        for ticker in tickers:
+            data[f'MA_short {ticker}'] = (
+                data[f'Close {ticker}']
+                .shift(1)
+                .rolling(window=self.ma_short)
+                .mean()
+            )
+            data[f'MA_long {ticker}'] = (
+                data[f'Close {ticker}']
+                .shift(1)
+                .rolling(window=self.ma_long)
+                .mean()
+            )
+            data[f'Signal {ticker}'] = 0
+            buy_mask = (
+                (data[f'MA_short {ticker}'] <
+                 self.thresh * data[f'MA_long {ticker}'])
+                &
+                (data[f'MA_short {ticker}'] >=
+                 self.thresh * data[f'MA_long {ticker}'])
+                .shift(1)
+            )
+            sell_mask = (
+                (data[f'MA_short {ticker}'] >
+                 (2 - self.thresh) * data[f'MA_long {ticker}'])
+                &
+                (data[f'MA_short {ticker}']
+                 <= (2 - self.thresh) * data[f'MA_long {ticker}'])
+                .shift(1)
+            )
+            data.loc[buy_mask, f'Signal {ticker}'] = 1
+            data.loc[sell_mask, f'Signal {ticker}'] = -1
+        return data
+
+
 class RSIStrategy(Strategy):
     def __init__(self, period=14, low=30, high=70):
         self.period = period
